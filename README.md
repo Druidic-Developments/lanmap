@@ -39,7 +39,9 @@ your LAN through NAT — no ARP, no MACs, no vendors. `network_mode: host` puts 
 directly on your LAN. `NET_RAW` enables ARP/SYN scans, `NET_ADMIN` enables OS detection.
 
 **Run it on a Linux Docker host** (Raspberry Pi, TrueNAS SCALE, Proxmox LXC/VM, any
-Linux box). Docker Desktop on Windows or macOS runs containers inside a VM, so
+Linux box). A Raspberry Pi 4 is plenty: the image builds natively on arm64 and armv7
+(all dependencies ship ARM wheels), and a quick port scan of ~30 devices takes a few
+minutes. Docker Desktop on Windows or macOS runs containers inside a VM, so
 `network_mode: host` only reaches that VM's private network, not your LAN — discovery
 will find nothing, or only the VM itself. If Windows is all you have, run it in a VM
 with a **bridged** network adapter, or natively under WSL2 with

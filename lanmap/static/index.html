@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lanmap</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◉</span>
+    <span class="brand-name">lanmap</span>
+    <span class="brand-sub" id="subnet-label">—</span>
+  </div>
+  <div class="stats" id="stats">
+    <div class="stat"><span class="stat-n" id="s-online">–</span><span class="stat-l">online</span></div>
+    <div class="stat"><span class="stat-n" id="s-total">–</span><span class="stat-l">known</span></div>
+    <div class="stat"><span class="stat-n" id="s-ports">–</span><span class="stat-l">open ports</span></div>
+    <div class="stat"><span class="stat-n" id="s-events">–</span><span class="stat-l">changes 24h</span></div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btn-discover" title="ARP/ping sweep of the subnet">Discover now</button>
+    <button class="btn" id="btn-scan-all" title="Quick port scan (top 1000) of every online device">Scan all ports</button>
+  </div>
+</header>
+
+<div class="scanbar" id="scanbar">
+  <span class="dot idle" id="scan-dot"></span>
+  <span id="scan-text">Idle</span>
+  <span class="scan-queue" id="scan-queue"></span>
+  <span class="scan-next" id="scan-next"></span>
+</div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="devices">Devices</button>
+  <button class="tab" data-tab="ports">Ports</button>
+  <button class="tab" data-tab="map">Map</button>
+  <button class="tab" data-tab="changes">Changes</button>
+  <button class="tab" data-tab="host">This host</button>
+</nav>
+
+<main>
+  <!-- ======================================================= DEVICES -->
+  <section class="panel active" id="tab-devices">
+    <div class="toolbar">
+      <input type="search" id="dev-filter" placeholder="filter by ip, name, mac, vendor, type…">
+      <label class="chk"><input type="checkbox" id="dev-online-only"> online only</label>
+      <span class="spacer"></span>
+      <span class="hint">Click a row to expand. Click a name or type to edit in place.</span>
+    </div>
+    <table class="grid" id="dev-table">
+      <thead><tr>
+        <th class="c-status"></th>
+        <th data-sort="ip">IP</th>
+        <th data-sort="name">Name</th>
+        <th data-sort="hostname">Hostname</th>
+        <th data-sort="mac">MAC</th>
+        <th data-sort="vendor">Vendor</th>
+        <th data-sort="device_type">Type</th>
+        <th data-sort="open_port_count" class="num">Ports</th>
+        <th data-sort="last_seen">Last seen</th>
+        <th data-sort="last_port_scan">Port scan</th>
+        <th class="c-actions"></th>
+      </tr></thead>
+      <tbody id="dev-body"></tbody>
+    </table>
+    <div class="empty" id="dev-empty" hidden>No devices yet. Run <b>Discover now</b>.</div>
+  </section>
+
+  <!-- ======================================================= PORTS -->
+  <section class="panel" id="tab-ports">
+    <div class="toolbar">
+      <input type="search" id="port-filter" placeholder="filter by port, service, product, ip, name…">
+      <span class="spacer"></span>
+      <span class="hint" id="port-count"></span>
+    </div>
+    <table class="grid" id="port-table">
+      <thead><tr>
+        <th data-sort="port" class="num">Port</th>
+        <th data-sort="protocol">Proto</th>
+        <th data-sort="service">Service</th>
+        <th data-sort="summary">What's running</th>
+        <th data-sort="ip">Device</th>
+        <th data-sort="state">State</th>
+        <th data-sort="first_seen">First seen</th>
+        <th data-sort="last_seen">Last seen</th>
+      </tr></thead>
+      <tbody id="port-body"></tbody>
+    </table>
+    <div class="empty" id="port-empty" hidden>No open ports recorded yet. Run a port scan from the Devices tab.</div>
+  </section>
+
+  <!-- ======================================================= MAP -->
+  <section class="panel" id="tab-map">
+    <div class="toolbar">
+      <span class="legend">
+        <span class="lg"><i class="sw gateway"></i>gateway</span>
+        <span class="lg"><i class="sw self"></i>this host</span>
+        <span class="lg"><i class="sw online"></i>online</span>
+        <span class="lg"><i class="sw offline"></i>offline</span>
+        <span class="lg"><i class="sw subnet"></i>subnet</span>
+      </span>
+      <span class="spacer"></span>
+      <label class="chk"><input type="checkbox" id="map-physics" checked> physics</label>
+      <button class="btn small" id="map-fit">Fit</button>
+    </div>
+    <div id="map"></div>
+    <div class="map-side" id="map-side" hidden></div>
+  </section>
+
+  <!-- ======================================================= CHANGES -->
+  <section class="panel" id="tab-changes">
+    <div class="toolbar">
+      <select id="ev-kind">
+        <option value="">all changes</option>
+        <option value="device_new">new devices</option>
+        <option value="device_online,device_offline">online / offline</option>
+        <option value="port_opened,port_closed">ports opened / closed</option>
+        <option value="service_changed">service changed</option>
+        <option value="ip_changed,hostname_changed,mac_changed">ip / hostname / mac changed</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="btn small" id="btn-scans">Scan history</button>
+    </div>
+    <ul class="feed" id="ev-list"></ul>
+    <div class="empty" id="ev-empty" hidden>Nothing has changed yet.</div>
+    <div id="scan-history" hidden>
+      <h3>Scan history</h3>
+      <table class="grid"><thead><tr><th>#</th><th>Kind</th><th>Status</th><th>Targets</th><th>Hosts up</th><th>Changes</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>
+      <tbody id="scan-body"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ======================================================= HOST -->
+  <section class="panel" id="tab-host">
+    <div class="toolbar">
+      <span class="hint">Listening sockets on the machine running lanmap, mapped to the owning process. This is the only host where "what's using the port" means an actual process — for other devices it's nmap's fingerprint.</span>
+    </div>
+    <div class="notice" id="host-error" hidden></div>
+    <table class="grid" id="host-table">
+      <thead><tr><th class="num">Port</th><th>Proto</th><th>Bound to</th><th>Process</th><th>PID</th><th>Reachable from LAN</th></tr></thead>
+      <tbody id="host-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="foot-nmap"></span> · <span id="foot-root"></span> · <span id="foot-ver"></span>
+</footer>
+
+<script src="/static/vis-network.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

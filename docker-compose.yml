@@ -1,0 +1,28 @@
+services:
+  lanmap:
+    build: .
+    container_name: lanmap
+    restart: unless-stopped
+    # Host networking is required: with the default bridge network the container
+    # sits on its own subnet and can't ARP-sweep your real LAN.
+    network_mode: host
+    # Lets `ss` map host listening ports to process names on the "This host" tab.
+    pid: host
+    cap_add:
+      - NET_RAW      # ARP ping + SYN scans
+      - NET_ADMIN    # OS detection
+    volumes:
+      - ./data:/data
+    environment:
+      # Leave LANMAP_SUBNETS unset to autodetect from the default route.
+      # LANMAP_SUBNETS: "192.168.1.0/24"
+      # LANMAP_GATEWAY: "192.168.1.1"
+      LANMAP_PORT: "8080"
+      LANMAP_SCAN_INTERVAL: "30"          # minutes between discovery sweeps (0 = manual only)
+      LANMAP_PORT_SCAN_INTERVAL: "360"    # minutes between quick port scans (0 = manual only)
+      LANMAP_QUICK_PORTS: "top1000"       # or an nmap list like "1-1024,8080,8096"
+      LANMAP_DEEP_PORTS: "1-65535"
+      LANMAP_HOST_TIMEOUT: "300"          # seconds per host before nmap gives up on it
+      LANMAP_PARALLEL: "4"                # hosts scanned at once (lower = gentler on IoT)
+      LANMAP_OFFLINE_AFTER: "2"           # missed sweeps before a device is marked offline
+      # LANMAP_SKIP_HOSTS: "192.168.1.51,192.168.1.60"   # never port-scan these

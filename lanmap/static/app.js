@@ -542,12 +542,13 @@
   async function loadHost() {
     try {
       const r = await api("/api/localports");
-      $("#host-error").hidden = !r.error;
-      $("#host-error").textContent = r.error || "";
+      const msg = r.error || r.hint;
+      $("#host-error").hidden = !msg;
+      $("#host-error").textContent = msg || "";
       $("#host-body").innerHTML = r.sockets.map(s => `<tr>
         <td class="num mono">${s.port}</td><td class="mono">${s.protocol}</td>
         <td class="mono">${esc(s.local_addr)}</td>
-        <td>${esc(s.process || "")}${!s.process ? '<span class="muted">unknown (needs root + host PID namespace)</span>' : ""}</td>
+        <td>${esc(s.process || "")}${!s.process ? '<span class="muted">unknown</span>' : ""}</td>
         <td class="mono muted">${s.pid ?? ""}</td>
         <td>${s.exposed ? "yes" : '<span class="muted">localhost only</span>'}</td></tr>`).join("");
     } catch (e) { $("#host-error").hidden = false; $("#host-error").textContent = e.message; }

@@ -12,6 +12,7 @@
 - [x] "This host" tab: listening sockets → process via `ss`
 - [x] Dockerfile + compose with host networking, NET_RAW/NET_ADMIN, pid: host
 - [x] Test suite on canned nmap XML (no network needed)
+- [x] "This host" diagnoses why process names are missing (root / pid: host / SYS_PTRACE / AppArmor) and compose grants SYS_PTRACE
 
 ## Next
 - [ ] UDP scan option (`-sU` on a short list: 53, 67, 123, 161, 1900, 5353) — slow, so opt-in per device

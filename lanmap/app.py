@@ -101,9 +101,9 @@ def create_app(settings: Settings | None = None, store: Store | None = None,
 
     @app.get("/api/localports")
     def local_ports():
-        sockets, error = localports.list_listening_sockets()
+        sockets, error, hint = localports.list_listening_sockets()
         return {"host": settings.local_ip, "sockets": [s.to_dict() for s in sockets],
-                "error": error}
+                "error": error, "hint": hint}
 
     # ----------------------------------------------------------------- events
     @app.get("/api/events")

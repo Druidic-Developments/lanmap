@@ -1,4 +1,6 @@
-from lanmap.localports import parse_ss_output
+from lanmap import localports
+from lanmap.localports import (has_cap_sys_ptrace, in_host_pid_namespace, parse_cap_eff,
+                               parse_ss_output, process_visibility_hint)
 
 SS = """\
 udp   UNCONN 0      0            0.0.0.0:5353       0.0.0.0:*    users:(("avahi-daemon",pid=612,fd=12))
@@ -34,3 +36,39 @@ def test_parse_ss_output():
 def test_parse_ss_empty_and_garbage():
     assert parse_ss_output("") == []
     assert parse_ss_output("nonsense line\n\n") == []
+
+
+DOCKER_DEFAULT_CAPS = "CapEff:\t00000000a80425fb\n"   # Docker's default bounding set
+WITH_PTRACE = "CapEff:\t00000000a80c25fb\n"           # same + bit 19 (SYS_PTRACE)
+
+
+def test_cap_parsing():
+    assert parse_cap_eff("Name:\tpython\n" + DOCKER_DEFAULT_CAPS) == 0xa80425fb
+    assert parse_cap_eff("no caps here") == 0
+    assert parse_cap_eff("CapEff:\tzzz\n") == 0
+    assert has_cap_sys_ptrace(DOCKER_DEFAULT_CAPS) is False
+    assert has_cap_sys_ptrace(WITH_PTRACE) is True
+    assert has_cap_sys_ptrace("CapEff:\t000001ffffffffff\n") is True   # full root
+
+
+def test_host_pid_namespace_detection():
+    assert in_host_pid_namespace("systemd") is True
+    assert in_host_pid_namespace("init") is True
+    assert in_host_pid_namespace("python") is False
+    assert in_host_pid_namespace("sh") is False
+
+
+def test_visibility_hint_names_what_is_missing(monkeypatch):
+    monkeypatch.setattr(localports.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(localports, "in_host_pid_namespace", lambda pid1_comm=None: False)
+    monkeypatch.setattr(localports, "has_cap_sys_ptrace", lambda status_text=None: False)
+    hint = process_visibility_hint()
+    assert "pid: host" in hint and "SYS_PTRACE" in hint and "root" not in hint
+
+    monkeypatch.setattr(localports, "in_host_pid_namespace", lambda pid1_comm=None: True)
+    monkeypatch.setattr(localports, "has_cap_sys_ptrace", lambda status_text=None: True)
+    hint = process_visibility_hint()
+    assert "AppArmor" in hint and "apparmor=unconfined" in hint
+
+    monkeypatch.setattr(localports.os, "geteuid", lambda: 1000, raising=False)
+    assert "not running as root" in process_visibility_hint()

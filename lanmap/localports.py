@@ -7,6 +7,7 @@ This is the one place we can answer "what is *using* this port" rather than
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -86,15 +87,84 @@ def parse_ss_output(text: str) -> list[ListeningSocket]:
     return sockets
 
 
-def list_listening_sockets() -> tuple[list[ListeningSocket], str | None]:
-    """Return (sockets, error). error is set when ss is unavailable."""
+# --------------------------------------------------------------------------- #
+# Why can't we see process names?  `ss -p` reads /proc/<pid>/fd for every
+# process, which needs: root, the host's PID namespace (pid: host), and
+# CAP_SYS_PTRACE (not in Docker's default capability set).  AppArmor's
+# docker-default profile can also block it on some distros.
+# --------------------------------------------------------------------------- #
+
+CAP_SYS_PTRACE_BIT = 19
+
+
+def parse_cap_eff(status_text: str) -> int:
+    """Effective capability mask from /proc/self/status text."""
+    for line in status_text.splitlines():
+        if line.startswith("CapEff:"):
+            try:
+                return int(line.split(":", 1)[1].strip(), 16)
+            except ValueError:
+                return 0
+    return 0
+
+
+def has_cap_sys_ptrace(status_text: str | None = None) -> bool:
+    if status_text is None:
+        try:
+            with open("/proc/self/status", encoding="utf-8") as fh:
+                status_text = fh.read()
+        except OSError:
+            return False
+    return bool(parse_cap_eff(status_text) & (1 << CAP_SYS_PTRACE_BIT))
+
+
+def in_host_pid_namespace(pid1_comm: str | None = None) -> bool:
+    """True when PID 1 looks like the host's init, not this container's entrypoint."""
+    if pid1_comm is None:
+        try:
+            with open("/proc/1/comm", encoding="utf-8") as fh:
+                pid1_comm = fh.read().strip()
+        except OSError:
+            return False
+    return pid1_comm.lower() in {"systemd", "init", "launchd", "openrc-init", "runit", "s6-svscan"}
+
+
+def process_visibility_hint() -> str | None:
+    """Explain why process names are missing, or None if everything needed is present."""
+    missing: list[str] = []
+    try:
+        if os.geteuid() != 0:
+            missing.append("not running as root")
+    except AttributeError:
+        pass
+    if not in_host_pid_namespace():
+        missing.append("not in the host PID namespace — add `pid: host` to the compose service")
+    if not has_cap_sys_ptrace():
+        missing.append("missing CAP_SYS_PTRACE — add `SYS_PTRACE` under cap_add")
+    if missing:
+        return "Process names unavailable: " + "; ".join(missing) + "."
+    return ("Process names unavailable even though root, host PID namespace and CAP_SYS_PTRACE "
+            "are all present — AppArmor is probably blocking /proc access. Add "
+            "`security_opt: [\"apparmor=unconfined\"]` to the compose service.")
+
+
+def list_listening_sockets() -> tuple[list[ListeningSocket], str | None, str | None]:
+    """Return (sockets, error, hint).
+
+    error: ss itself failed.
+    hint:  ss worked but couldn't attribute sockets to processes, with the reason.
+    """
     try:
         proc = subprocess.run(["ss", "-H", "-lptun"], capture_output=True, text=True,
                               timeout=10, check=False)
     except FileNotFoundError:
-        return [], "ss (iproute2) is not installed"
+        return [], "ss (iproute2) is not installed", None
     except subprocess.SubprocessError as exc:
-        return [], f"ss failed: {exc}"
+        return [], f"ss failed: {exc}", None
     if proc.returncode != 0 and not proc.stdout.strip():
-        return [], f"ss exited {proc.returncode}: {proc.stderr.strip()[:200]}"
-    return parse_ss_output(proc.stdout), None
+        return [], f"ss exited {proc.returncode}: {proc.stderr.strip()[:200]}", None
+    sockets = parse_ss_output(proc.stdout)
+    hint = None
+    if sockets and not any(s.process for s in sockets):
+        hint = process_visibility_hint()
+    return sockets, None, hint

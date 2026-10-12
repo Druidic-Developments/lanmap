@@ -19,7 +19,7 @@ Built on **nmap** + **FastAPI** + **SQLite**. One container, no external service
 ### What "what's using the port" means
 
 - For **other devices** on the LAN it's nmap's service fingerprint (`22/tcp OpenSSH 9.2p1`, `8096/tcp Jellyfin`). No scanner can see remote process names.
-- For **the host running lanmap** it's the actual process (`ss -lptn`), shown on the *This host* tab. In Docker this needs `pid: host` and root (both set in the compose file).
+- For **the host running lanmap** it's the actual process (`ss -lptn`), shown on the *This host* tab. In Docker this needs root, `pid: host` and the `SYS_PTRACE` capability (all set in the compose file). If the tab still shows `unknown` for every process, AppArmor is blocking `/proc` access — uncomment the `security_opt: apparmor=unconfined` lines in the compose file. The tab tells you which of these is missing.
 
 ## Quick start
 
@@ -30,7 +30,8 @@ docker compose up -d --build
 
 Open `http://<docker-host-ip>:8080`. A discovery sweep starts on boot; the subnet and
 gateway are autodetected from the default route. Hit **Scan all ports** for the first
-port inventory (a few minutes for ~30 devices).
+port inventory (a few minutes for ~30 devices). The database persists in the
+`lanmap-data` Docker volume.
 
 ### Why host networking
 
@@ -47,6 +48,37 @@ will find nothing, or only the VM itself. If Windows is all you have, run it in 
 with a **bridged** network adapter, or natively under WSL2 with
 [mirrored networking mode](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking)
 (`sudo python -m lanmap`, no Docker).
+
+### Portainer
+
+A stack pasted into Portainer's web editor can't `build:` (it has no Dockerfile to
+build from), so pick one of these:
+
+**A. Git repository stack** (builds on the Pi, redeploys on push)
+
+1. Push this repo to GitHub / Gitea / wherever.
+2. Portainer → *Stacks* → *Add stack* → *Repository*.
+3. Repository URL = your repo, Compose path = `docker-compose.yml`, name it `lanmap`.
+4. *Deploy the stack*. First build takes a few minutes on a Pi 4.
+
+Later, *Pull and redeploy* on the stack picks up new commits.
+
+**B. Pre-build the image, then paste the stack**
+
+On the Pi over SSH:
+
+```bash
+git clone <repo> lanmap && cd lanmap
+docker build -t lanmap:latest .
+```
+
+Then in Portainer → *Stacks* → *Add stack* → *Web editor*, paste `docker-compose.yml`
+with the `build: .` line removed (keep `image: lanmap:latest`). To update, rebuild the
+image and *Update the stack* with *Re-pull image and redeploy* **off**.
+
+Either way the database lives in the named volume `lanmap-data`, visible under
+Portainer → *Volumes*. Set environment variables in the stack's *Environment
+variables* section or by editing the compose text.
 
 ### Running without Docker
 

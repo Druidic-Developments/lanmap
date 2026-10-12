@@ -11,6 +11,7 @@ services:
     cap_add:
       - NET_RAW      # ARP ping + SYN scans
       - NET_ADMIN    # OS detection
+      - SYS_PTRACE   # read /proc/<pid>/fd of host processes (port -> process)
     volumes:
       - ./data:/data
     environment:
